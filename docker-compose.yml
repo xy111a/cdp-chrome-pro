@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  cdp-chrome-pro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cdp-chrome-pro:latest
+    container_name: cdp-chrome-pro
+    restart: unless-stopped
+
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # 端口映射（避免冲突）
+    ports:
+      - "6081:6080"  # noVNC (避免与 cdp-chrome 冲突)
+      - "8002:8000"  # Context Manager API
+      - "9334:9333"  # CDP Proxy
+
+    # 目录挂载
+    volumes:
+      - ./profiles:/profiles
+      - ./data:/data
+
+    # 环境变量
+    environment:
+      - DISPLAY=:99
+      - PROFILES_DIR=/profiles
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # 网络配置
+    networks:
+      - cdp-network
+
+networks:
+  cdp-network:
+    driver: bridge
