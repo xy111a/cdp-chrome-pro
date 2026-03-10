@@ -16,7 +16,7 @@ RUN chown chrome:chrome /opt /profiles
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-COPY context-manager.py /opt/context-manager.py
+COPY context-manager-v3.py /opt/context-manager.py
 RUN chmod +x /opt/context-manager.py
 
 COPY antibot.js /opt/antibot.js

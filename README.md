@@ -231,14 +231,123 @@ http://192.168.88.247:6081/vnc.html?autoconnect=true&host=192.168.88.247&port=60
 
 ## 反爬能力
 
-镜像内置反爬脚本，自动注入：
+镜像内置 `antibot.js` 反爬脚本（v2.0.0），支持平台特定功能隔离：
+
+### 设计原则
+
+- **通用功能**：对所有站点生效，不影响正常浏览
+- **平台特定功能**：通过域名检测自动启用，避免对其他站点造成影响
+- **人类行为 API**：供外部调用的高级行为模拟
+
+### 通用反检测功能（所有站点）
 
 | 功能 | 说明 |
 |------|------|
-| WebGL 指纹随机 | 伪装显卡信息 |
-| Canvas 噪声 | 防止指纹追踪 |
-| Navigator 伪装 | 移除 webdriver 标记 |
-| 行为模拟 | 随机鼠标移动、滚动 |
+| WebGL 指纹随机 | 伪装显卡信息 (Intel Iris OpenGL Engine) |
+| Canvas 噪声注入 | 防止 Canvas 指纹追踪 |
+| Navigator 伪装 | 移除 webdriver 标记，伪装 plugins/languages |
+| CDP 特征隐藏 | 删除所有 Selenium/Puppeteer 特征变量 |
+| 时间戳一致性 | 确保 performance.now() 和 Date.now() 一致 |
+| 权限 API 伪装 | 模拟真实浏览器的权限响应 |
+| Screen 属性伪装 | 固定屏幕分辨率 1920x1080 |
+
+### 平台特定功能
+
+通过域名检测自动启用，当前支持：
+
+| 平台 | 域名 | 功能 |
+|------|------|------|
+| 小红书 | xiaohongshu.com, *.xiaohongshu.com | 检测脚本拦截、全局变量覆盖 |
+
+#### 小红书特定功能
+
+- 覆盖检测相关全局变量 (`_xcs`, `_xmta`, `_xhs_tracker`)
+- 拦截可疑检测脚本（含 `detect`, `antibot`, `security-check` 关键字）
+- 阻止 webdriver 检测脚本注入
+
+### 扩展其他平台
+
+在 `antibot.js` 中添加新平台配置：
+
+```javascript
+const CONFIG = {
+    platformSpecific: {
+        'xiaohongshu.com': {
+            enabled: true,
+            features: ['xhsGlobals', 'scriptBlocking']
+        },
+        // 添加新平台
+        'example.com': {
+            enabled: true,
+            features: ['customFeature1', 'customFeature2']
+        }
+    }
+};
+
+// 实现平台特定功能
+const applyPlatformSpecific = (platform) => {
+    // ...
+    if (platform.features.includes('customFeature1')) {
+        // 你的自定义逻辑
+    }
+};
+```
+
+### 人类行为模拟 API
+
+脚本自动挂载 `window.humanAPI`，供 Playwright 等外部调用：
+
+```javascript
+// 鼠标移动（贝塞尔曲线轨迹）
+await window.humanAPI.moveTo(500, 300, { duration: 500 });
+
+// 点击元素（先移动再点击）
+await window.humanAPI.click(element);
+
+// 模拟输入（随机延迟）
+await window.humanAPI.type(inputElement, 'Hello World', {
+    minDelay: 30,
+    maxDelay: 120
+});
+
+// 滚动
+await window.humanAPI.scroll('down', 500);
+
+// 随机等待
+await window.humanAPI.randomDelay(1000, 3000);
+```
+
+#### Playwright 集成示例
+
+```python
+# 在 Playwright 中使用 humanAPI
+page.goto("https://xiaohongshu.com")
+
+# 获取元素并模拟人类点击
+element = page.query_selector(".search-input")
+page.evaluate("""
+    (el) => window.humanAPI.click(el)
+""", element)
+
+# 模拟人类输入
+page.evaluate("""
+    (el) => window.humanAPI.type(el, '搜索关键词', { minDelay: 50, maxDelay: 150 })
+""", element)
+```
+
+### 调试模式
+
+启用调试日志：
+
+```javascript
+// 在 antibot.js 中修改
+const CONFIG = {
+    debug: true,  // 开启调试日志
+    // ...
+};
+```
+
+控制台将输出 `[AntiBot]` 前缀的日志信息。
 
 ## 代码审核
 
@@ -271,6 +380,7 @@ ssh huajun@192.168.88.247 'cd /volume1/docker/cdp-chrome-pro && docker compose r
 
 ## 更新日志
 
+- **2026-03-10**: v2.0.0 antibot.js 重构，支持平台特定功能隔离、人类行为 API
 - **2026-03-08**: v3 版本，修复竞态条件，添加状态持久化
 - **2026-03-08**: v2 版本，3 并发 + 排队协调
 - **2026-03-08**: v1 版本，基础 Context 管理

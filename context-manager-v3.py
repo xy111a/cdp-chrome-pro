@@ -246,7 +246,8 @@ class ExecuteEndRequest(BaseModel):
 @app.post("/execute/start")
 async def start_execution(request: ExecuteStartRequest):
     """获取槽位（自动排队）"""
-    result = await slot_manager.acquire(request.agent_id, request.timeout)
+    timeout = request.timeout or DEFAULT_SLOT_TIMEOUT
+    result = await slot_manager.acquire(request.agent_id, timeout)
     return JSONResponse(result)
 
 @app.post("/execute/end")
@@ -328,6 +329,29 @@ async def metrics():
         },
         media_type="application/json"
     )
+
+@app.get("/antibot/script")
+async def get_antibot_script():
+    """获取反爬脚本"""
+    antibot_path = Path("/opt/antibot.js")
+    if not antibot_path.exists():
+        raise HTTPException(status_code=404, detail="Antibot script not found")
+    
+    async with aiofiles.open(antibot_path, 'r') as f:
+        content = await f.read()
+    
+    # 提取版本号
+    version = "unknown"
+    for line in content.split('\n')[:20]:
+        if '版本:' in line or 'version:' in line.lower():
+            version = line.split(':')[-1].strip().strip("'\"")
+            break
+    
+    return {
+        "script": content,
+        "version": version,
+        "size": len(content)
+    }
 
 # ============ 生命周期 ============
 
